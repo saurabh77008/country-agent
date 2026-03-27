@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Country Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0c0f14;
+  --surface:#151921;
+  --surface-2:#1c2230;
+  --surface-3:#232a38;
+  --border:#2a3244;
+  --border-hover:#3d4a62;
+  --text:#e4e8ef;
+  --text-muted:#8891a4;
+  --accent:#5ce0d8;
+  --accent-dim:#2a6e6a;
+  --accent-bg:rgba(92,224,216,0.08);
+  --error:#f87171;
+  --success:#4ade80;
+  --font-display:'DM Serif Display',Georgia,serif;
+  --font-body:'DM Sans',-apple-system,sans-serif;
+}
+
+html{font-size:16px}
+body{
+  font-family:var(--font-body);background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:9999;opacity:.5;
+}
+
+/* ── Layout ──────────────────────────────── */
+.container{
+  width:100%;max-width:720px;
+  padding:2rem 1.5rem 3rem;
+  display:flex;flex-direction:column;align-items:center;
+  flex:1;min-height:100vh;
+}
+
+/* ── Header ──────────────────────────────── */
+header{text-align:center;padding:2rem 0 1.5rem;width:100%;position:relative}
+header h1{
+  font-family:var(--font-display);font-size:2.4rem;font-weight:400;
+  letter-spacing:-0.02em;
+  background:linear-gradient(135deg,var(--accent) 0%,#7fe0c8 50%,var(--accent) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+header p{color:var(--text-muted);margin-top:.4rem;font-size:.92rem;max-width:420px;margin-inline:auto;line-height:1.5}
+
+/* ── Top bar buttons ─────────────────────── */
+.top-actions{
+  position:absolute;top:2rem;right:0;
+  display:flex;gap:6px;
+}
+.icon-btn{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  color:var(--text-muted);padding:8px 12px;cursor:pointer;
+  font-size:.82rem;font-family:var(--font-body);
+  display:flex;align-items:center;gap:5px;transition:all .2s;
+}
+.icon-btn:hover{border-color:var(--accent-dim);color:var(--accent)}
+.icon-btn.active{border-color:var(--accent-dim);color:var(--accent);background:var(--accent-bg)}
+.icon-btn svg{width:16px;height:16px}
+.history-count{
+  background:var(--accent);color:var(--bg);
+  font-size:.65rem;font-weight:600;
+  width:17px;height:17px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+
+/* ── Settings panel ──────────────────────── */
+.settings-panel{
+  display:none;width:100%;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:1.2rem;margin-bottom:1rem;animation:fadeUp .25s ease-out;
+}
+.settings-panel.open{display:block}
+.settings-panel h3{font-size:.88rem;font-weight:500;color:var(--text);margin-bottom:.8rem}
+.settings-row{display:flex;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap}
+.settings-row label{font-size:.8rem;color:var(--text-muted);width:100%;margin-bottom:2px}
+.settings-row select,.settings-row input[type="password"]{
+  flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:.85rem;font-family:var(--font-body);
+  padding:.55rem .7rem;outline:none;transition:border-color .2s;
+}
+.settings-row select:focus,.settings-row input:focus{border-color:var(--accent-dim)}
+.settings-row select{cursor:pointer;-webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238891a4' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right .7rem center;padding-right:2rem;
+}
+.settings-note{font-size:.75rem;color:var(--text-muted);margin-top:.4rem;line-height:1.4}
+.settings-status{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:.78rem;margin-top:.5rem;padding:.3rem .6rem;border-radius:6px;
+}
+.settings-status.on{color:var(--success);background:rgba(74,222,128,0.08)}
+.settings-status.off{color:var(--text-muted);background:var(--surface-2)}
+
+/* ── Input area ──────────────────────────── */
+.input-area{
+  width:100%;background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:4px;display:flex;align-items:center;
+  transition:border-color .2s,box-shadow .2s;
+}
+.input-area:focus-within{border-color:var(--accent-dim);box-shadow:0 0 0 3px rgba(92,224,216,.1)}
+.input-area input{
+  flex:1;background:transparent;border:none;outline:none;
+  color:var(--text);font-size:1rem;font-family:var(--font-body);padding:.85rem 1rem;
+}
+.input-area input::placeholder{color:var(--text-muted)}
+.send-btn{
+  display:flex;align-items:center;justify-content:center;
+  background:var(--accent);color:var(--bg);border:none;border-radius:12px;
+  width:44px;height:44px;cursor:pointer;flex-shrink:0;transition:transform .15s,opacity .15s;
+}
+.send-btn:hover{transform:scale(1.05)}
+.send-btn:active{transform:scale(.95)}
+.send-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.send-btn svg{width:20px;height:20px}
+
+/* ── Suggestions ─────────────────────────── */
+.suggestions{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;margin-top:1rem;width:100%}
+.suggestions button{
+  background:var(--surface);border:1px solid var(--border);border-radius:100px;
+  color:var(--text-muted);font-size:.82rem;font-family:var(--font-body);
+  padding:.45rem .9rem;cursor:pointer;transition:all .2s;
+}
+.suggestions button:hover{border-color:var(--accent-dim);color:var(--accent);background:var(--surface-2)}
+
+/* ── Answer card (single, replaces itself) ── */
+.answer-area{width:100%;margin-top:1.5rem;display:none}
+.answer-area.visible{display:block}
+
+.answer-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:1.4rem 1.5rem;animation:fadeUp .35s ease-out both;
+}
+.answer-card .question-echo{
+  font-size:.82rem;color:var(--text-muted);margin-bottom:.8rem;
+  display:flex;align-items:center;gap:6px;
+}
+.answer-card .question-echo svg{width:14px;height:14px;flex-shrink:0;opacity:.5}
+.answer-card .answer-body{line-height:1.7;font-size:.95rem}
+.answer-card .answer-body strong{color:var(--accent);font-weight:600}
+.answer-card .llm-badge{
+  display:inline-block;font-size:.68rem;
+  background:var(--accent-bg);color:var(--accent);
+  padding:2px 7px;border-radius:4px;margin-bottom:8px;font-weight:500;
+}
+.answer-card .error-text{color:var(--error)}
+
+/* data toggle inside answer */
+.data-toggle{
+  display:inline-flex;align-items:center;gap:6px;margin-top:.8rem;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+  padding:.35rem .7rem;font-size:.78rem;color:var(--text-muted);
+  cursor:pointer;font-family:var(--font-body);transition:color .15s;
+}
+.data-toggle:hover{color:var(--accent)}
+.data-toggle svg{width:14px;height:14px;transition:transform .2s}
+.data-toggle.open svg{transform:rotate(90deg)}
+.data-json{
+  display:none;margin-top:.5rem;background:var(--surface-2);border-radius:10px;
+  padding:.8rem 1rem;overflow-x:auto;
+  font-family:'SF Mono','Fira Code',monospace;font-size:.78rem;
+  color:var(--text-muted);line-height:1.5;white-space:pre-wrap;
+}
+.data-json.open{display:block}
+
+/* ── Loading ─────────────────────────────── */
+.loading-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:1.4rem 1.5rem;display:flex;align-items:center;gap:10px;
+  animation:fadeUp .3s ease-out both;
+}
+.loading-card .dots{display:flex;gap:5px}
+.loading-card .dots span{
+  width:8px;height:8px;border-radius:50%;background:var(--accent-dim);
+  animation:bounce .6s infinite alternate;
+}
+.loading-card .dots span:nth-child(2){animation-delay:.15s}
+.loading-card .dots span:nth-child(3){animation-delay:.3s}
+.loading-card .loading-text{font-size:.85rem;color:var(--text-muted)}
+@keyframes bounce{to{background:var(--accent);transform:translateY(-5px)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── History drawer ──────────────────────── */
+.history-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
+  animation:fadeIn .2s ease-out;
+}
+.history-overlay.open{display:block}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+.history-drawer{
+  position:fixed;top:0;right:-380px;width:360px;max-width:90vw;height:100vh;
+  background:var(--bg);border-left:1px solid var(--border);
+  z-index:101;padding:0;
+  transition:right .3s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;
+}
+.history-drawer.open{right:0}
+
+.history-header{
+  padding:1.2rem 1.2rem .8rem;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.history-header h3{font-size:.95rem;font-weight:500}
+.history-close{
+  background:none;border:none;color:var(--text-muted);cursor:pointer;
+  padding:4px;border-radius:6px;transition:color .15s;
+}
+.history-close:hover{color:var(--text)}
+.history-close svg{width:20px;height:20px}
+
+.history-list{flex:1;overflow-y:auto;padding:.6rem}
+.history-empty{
+  text-align:center;padding:3rem 1rem;color:var(--text-muted);font-size:.88rem;
+}
+
+.history-item{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:.9rem 1rem;margin-bottom:.5rem;cursor:pointer;
+  transition:all .15s;
+}
+.history-item:hover{border-color:var(--accent-dim);background:var(--surface-2)}
+.history-item .hi-question{
+  font-size:.84rem;font-weight:500;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.history-item .hi-answer{
+  font-size:.78rem;color:var(--text-muted);margin-top:4px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.history-item .hi-country{
+  display:inline-block;font-size:.68rem;
+  background:var(--accent-bg);color:var(--accent);
+  padding:1px 6px;border-radius:4px;margin-top:5px;
+}
+.history-item .hi-time{font-size:.7rem;color:var(--text-muted);opacity:.6;margin-top:4px}
+
+.history-clear{
+  padding:.8rem 1.2rem;border-top:1px solid var(--border);flex-shrink:0;
+}
+.history-clear button{
+  width:100%;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:8px;color:var(--text-muted);font-size:.82rem;
+  font-family:var(--font-body);padding:.5rem;cursor:pointer;transition:all .2s;
+}
+.history-clear button:hover{border-color:var(--error);color:var(--error)}
+
+footer{text-align:center;padding:1.5rem 0;color:var(--text-muted);font-size:.8rem;opacity:.5}
+
+@media(max-width:520px){
+  header h1{font-size:1.8rem}
+  .container{padding:1.2rem 1rem 2rem}
+  .top-actions{position:static;justify-content:center;margin-top:.6rem}
+  .history-drawer{width:100%;max-width:100%;right:-100%}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Country Agent</h1>
+    <p>Ask me anything about a country — capitals, currencies, population, languages, and more.</p>
+    <div class="top-actions">
+      <button class="icon-btn" id="historyBtn" onclick="toggleHistory()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        History
+        <span class="history-count" id="historyCount" style="display:none">0</span>
+      </button>
+      <button class="icon-btn" id="settingsBtn" onclick="toggleSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+        Settings
+      </button>
+    </div>
+  </header>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel" id="settingsPanel">
+    <h3>LLM Enhancement (optional)</h3>
+    <p class="settings-note" style="margin-bottom:.8rem">
+      Add an API key for richer, conversational answers. Without it, you get accurate template-based answers.
+    </p>
+    <div class="settings-row">
+      <label>Provider</label>
+      <select id="llmProvider" onchange="updateModelOptions()">
+        <option value="">None (template answers)</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <label>API Key</label>
+      <input type="password" id="llmApiKey" placeholder="sk-... or sk-ant-...">
+    </div>
+    <div class="settings-row">
+      <label>Model</label>
+      <select id="llmModel"><option value="">Default</option></select>
+    </div>
+    <div id="llmStatus" class="settings-status off">● Template mode</div>
+  </div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <input type="text" id="queryInput" placeholder="e.g. What is the population of India?" autocomplete="off">
+    <button class="send-btn" id="sendBtn" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Suggestions -->
+  <div class="suggestions" id="suggestions">
+    <button>Capital of France?</button>
+    <button>Population of India?</button>
+    <button>Currency of Japan?</button>
+    <button>Tell me about Brazil</button>
+    <button>Languages in Switzerland?</button>
+  </div>
+
+  <!-- Single answer area (replaces itself each time) -->
+  <div class="answer-area" id="answerArea"></div>
+</div>
+
+<footer>Powered by LangGraph · REST Countries API</footer>
+
+<!-- History Overlay + Drawer -->
+<div class="history-overlay" id="historyOverlay" onclick="toggleHistory()"></div>
+<div class="history-drawer" id="historyDrawer">
+  <div class="history-header">
+    <h3>Recent searches</h3>
+    <button class="history-close" onclick="toggleHistory()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="history-list" id="historyList">
+    <div class="history-empty">No searches yet</div>
+  </div>
+  <div class="history-clear">
+    <button onclick="clearHistory()">Clear history</button>
+  </div>
+</div>
+
+<script>
+const input = document.getElementById('queryInput');
+const sendBtn = document.getElementById('sendBtn');
+const answerArea = document.getElementById('answerArea');
+const suggestionsEl = document.getElementById('suggestions');
+
+// ── History (max 5, stored in localStorage) ──
+const MAX_HISTORY = 5;
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('country_agent_history') || '[]'); }
+  catch { return []; }
+}
+
+function saveHistory(arr) {
+  localStorage.setItem('country_agent_history', JSON.stringify(arr));
+  updateHistoryBadge();
+}
+
+function addToHistory(entry) {
+  let h = getHistory();
+  // Remove duplicate question
+  h = h.filter(x => x.question.toLowerCase() !== entry.question.toLowerCase());
+  h.unshift(entry);
+  if (h.length > MAX_HISTORY) h = h.slice(0, MAX_HISTORY);
+  saveHistory(h);
+  renderHistoryList();
+}
+
+function clearHistory() {
+  saveHistory([]);
+  renderHistoryList();
+}
+
+function updateHistoryBadge() {
+  const count = getHistory().length;
+  const badge = document.getElementById('historyCount');
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderHistoryList() {
+  const list = document.getElementById('historyList');
+  const h = getHistory();
+  if (h.length === 0) {
+    list.innerHTML = '<div class="history-empty">No searches yet</div>';
+    return;
+  }
+  list.innerHTML = h.map((item, i) => {
+    const plainAnswer = item.answer.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\n/g, ' ');
+    const timeStr = timeAgo(item.timestamp);
+    return `
+      <div class="history-item" onclick="loadFromHistory(${i})">
+        <div class="hi-question">${escapeHtml(item.question)}</div>
+        <div class="hi-answer">${escapeHtml(plainAnswer)}</div>
+        ${item.country ? `<span class="hi-country">${escapeHtml(item.country)}</span>` : ''}
+        <div class="hi-time">${timeStr}</div>
+      </div>`;
+  }).join('');
+}
+
+function loadFromHistory(index) {
+  const h = getHistory();
+  if (!h[index]) return;
+  const item = h[index];
+  toggleHistory(); // close drawer
+  showAnswer(item.question, item.answer, item.data, item.error, item.llmUsed, item.provider);
+}
+
+function timeAgo(ts) {
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+function toggleHistory() {
+  document.getElementById('historyOverlay').classList.toggle('open');
+  document.getElementById('historyDrawer').classList.toggle('open');
+}
+
+// ── Settings ──────────────────────────────
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  const btn = document.getElementById('settingsBtn');
+  panel.classList.toggle('open');
+  btn.classList.toggle('active');
+}
+
+function updateModelOptions() {
+  const provider = document.getElementById('llmProvider').value;
+  const modelSelect = document.getElementById('llmModel');
+  const status = document.getElementById('llmStatus');
+  modelSelect.innerHTML = '<option value="">Default</option>';
+  if (provider === 'openai') {
+    ['gpt-4o-mini','gpt-4o','gpt-4-turbo','gpt-3.5-turbo'].forEach(m =>
+      modelSelect.innerHTML += `<option value="${m}">${m}</option>`);
+    status.className = 'settings-status on';
+    status.textContent = '● OpenAI enhanced';
+  } else if (provider === 'anthropic') {
+    ['claude-sonnet-4-20250514','claude-haiku-4-20250414','claude-3-5-sonnet-20241022'].forEach(m =>
+      modelSelect.innerHTML += `<option value="${m}">${m}</option>`);
+    status.className = 'settings-status on';
+    status.textContent = '● Anthropic enhanced';
+  } else {
+    status.className = 'settings-status off';
+    status.textContent = '● Template mode';
+  }
+}
+
+function getLLMSettings() {
+  const provider = document.getElementById('llmProvider').value;
+  const apiKey = document.getElementById('llmApiKey').value.trim();
+  const model = document.getElementById('llmModel').value;
+  if (provider && apiKey) return { llm_provider: provider, llm_api_key: apiKey, llm_model: model || null };
+  return {};
+}
+
+// ── Suggestions ───────────────────────────
+suggestionsEl.addEventListener('click', e => {
+  if (e.target.tagName === 'BUTTON') { input.value = e.target.textContent; send(); }
+});
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) send(); });
+sendBtn.addEventListener('click', send);
+
+// ── Show answer (single card, replaces previous) ──
+function showAnswer(question, answer, data, error, llmUsed, provider) {
+  suggestionsEl.style.display = 'none';
+  answerArea.classList.add('visible');
+
+  const isError = error && !answer;
+  const badge = llmUsed ? `<span class="llm-badge">${escapeHtml(provider)} enhanced</span>` : '';
+  const bodyHtml = isError
+    ? `<div class="error-text">${renderMd(error)}</div>`
+    : renderMd(answer || 'No response.');
+
+  let dataHtml = '';
+  if (data && Object.keys(data).length > 0) {
+    dataHtml = `
+      <button class="data-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        Raw data
+      </button>
+      <div class="data-json">${escapeHtml(JSON.stringify(data, null, 2))}</div>`;
+  }
+
+  answerArea.innerHTML = `
+    <div class="answer-card">
+      <div class="question-echo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        ${escapeHtml(question)}
+      </div>
+      ${badge}
+      <div class="answer-body">${bodyHtml}</div>
+      ${dataHtml}
+    </div>`;
+}
+
+// ── Send ──────────────────────────────────
+async function send() {
+  const q = input.value.trim();
+  if (!q) return;
+
+  input.value = '';
+  sendBtn.disabled = true;
+  suggestionsEl.style.display = 'none';
+
+  // Show loading state
+  answerArea.classList.add('visible');
+  answerArea.innerHTML = `
+    <div class="loading-card">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <span class="loading-text">Looking up country data...</span>
+    </div>`;
+
+  const llmSettings = getLLMSettings();
+
+  try {
+    const res = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, ...llmSettings }),
+    });
+    const data = await res.json();
+
+    const llmUsed = !!(llmSettings.llm_provider && llmSettings.llm_api_key && !data.error);
+    showAnswer(q, data.answer, data.data, data.error, llmUsed, llmSettings.llm_provider);
+
+    // Save to history
+    addToHistory({
+      question: q,
+      answer: data.answer || data.error || '',
+      country: data.country || null,
+      data: data.data || {},
+      error: data.error || null,
+      llmUsed,
+      provider: llmSettings.llm_provider || null,
+      timestamp: Date.now(),
+    });
+
+  } catch (err) {
+    answerArea.innerHTML = `
+      <div class="answer-card">
+        <div class="question-echo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          ${escapeHtml(q)}
+        </div>
+        <div class="answer-body error-text">Network error — is the server running?</div>
+      </div>`;
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// ── Helpers ───────────────────────────────
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+function renderMd(text) {
+  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+
+// ── Init ──────────────────────────────────
+updateHistoryBadge();
+renderHistoryList();
+</script>
+</body>
+</html>

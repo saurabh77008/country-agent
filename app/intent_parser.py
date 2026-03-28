@@ -1,23 +1,4 @@
-"""
-Node 1 — Intent & Field Identification
-
-Extracts country name + requested fields from a user query.
-
-SOLID design:
-  SRP — each extractor class does exactly one thing
-  OCP — add new extraction strategies by adding a class, not editing existing ones
-  LSP — all extractors are interchangeable via ICountryExtractor
-  DIP — parse_intent depends on ICountryExtractor / IFieldExtractor abstractions
-
-Edge cases handled:
-  • Possessive forms          "Japan's capital"  → "Japan"
-  • Common aliases            "USA", "UAE", "Burma", "Siam", "Persia" …
-  • Fuzzy / typo matching     "Frence" → France,  "Germanu" → Germany
-  • Ambiguous names           "Georgia", "Korea", "Sudan", "Congo", "Guinea"
-  • Historical / defunct      "USSR", "Yugoslavia", "East Germany" …
-  • Multi-country comparison  "France vs Germany", "compare India and China"
-  • Dot-separated acronyms    "U.S.A." → "usa"
-"""
+"""Node 1 — extract country name and requested fields from a user query."""
 
 from __future__ import annotations
 
@@ -32,8 +13,6 @@ from app.models import (
     CountryField,
     FIELD_KEYWORDS,
 )
-
-# ── Data ──────────────────────────────────────────────────────────────────────
 
 _KNOWN_COUNTRIES: List[str] = [
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola",
@@ -77,9 +56,7 @@ _KNOWN_COUNTRIES: List[str] = [
 
 _COUNTRY_LOOKUP: Dict[str, str] = {c.lower(): c for c in _KNOWN_COUNTRIES}
 
-# OCP: extend this dict to add aliases; never modify extractor logic
 _COUNTRY_ALIASES: Dict[str, str] = {
-    # United States
     "usa": "United States",
     "us": "United States",
     "u.s.": "United States",
@@ -87,22 +64,18 @@ _COUNTRY_ALIASES: Dict[str, str] = {
     "america": "United States",
     "united states of america": "United States",
     "the united states": "United States",
-    # United Kingdom
     "uk": "United Kingdom",
     "u.k.": "United Kingdom",
     "england": "United Kingdom",
     "britain": "United Kingdom",
     "great britain": "United Kingdom",
-    # UAE
     "uae": "United Arab Emirates",
     "u.a.e.": "United Arab Emirates",
     "emirates": "United Arab Emirates",
-    # Europe
     "holland": "Netherlands",
     "the netherlands": "Netherlands",
     "czech republic": "Czechia",
     "deutschland": "Germany",
-    # Asia
     "nippon": "Japan",
     "nihon": "Japan",
     "burma": "Myanmar",
@@ -114,18 +87,14 @@ _COUNTRY_ALIASES: Dict[str, str] = {
     "rok": "South Korea",
     "formosa": "Taiwan",
     "timor": "Timor-Leste",
-    # Africa
     "ivory coast": "Cote d'Ivoire",
     "drc": "Democratic Republic of the Congo",
     "dr congo": "Democratic Republic of the Congo",
     "zaire": "Democratic Republic of the Congo",
     "rhodesia": "Zimbabwe",
     "ceylon": "Sri Lanka",
-    # Americas
     "brasil": "Brazil",
-    # Pacific
     "png": "Papua New Guinea",
-    # Other
     "vatican": "Vatican City",
     "the philippines": "Philippines",
     "bosnia": "Bosnia and Herzegovina",
@@ -138,7 +107,6 @@ _COUNTRY_ALIASES: Dict[str, str] = {
     "st vincent": "Saint Vincent and the Grenadines",
 }
 
-# Regex that detects multi-country comparison intent
 _COMPARISON_RE = re.compile(
     r"\b(vs\.?|versus|compare(?:d)?(?:\s+to)?|bigger than|larger than|"
     r"smaller than|difference between|between .+ and|more than|less than)\b",
@@ -153,37 +121,21 @@ _STOP_WORDS = frozenset(
 )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
 def _normalise(text: str) -> str:
-    """Lower-case, remove punctuation, expand possessives, collapse spaces."""
-    # Remove possessives before stripping punctuation so "japan's" → "japan"
     text = re.sub(r"'s\b", "", text, flags=re.IGNORECASE)
     text = re.sub(r"s'\b", "", text, flags=re.IGNORECASE)
-    # Remove dots in acronyms so "U.S.A." → "usa"
     text = re.sub(r"(?<=[a-zA-Z])\.(?=[a-zA-Z])", "", text)
-    # Strip remaining non-word chars (keep spaces)
     text = re.sub(r"[^\w\s]", " ", text.lower())
     return re.sub(r"\s+", " ", text).strip()
 
 
-# ── Extractor classes (SRP + OCP + LSP) ──────────────────────────────────────
-
 class _AliasExtractor:
-    """
-    Checks a static alias dictionary.
-    OCP: extend by adding entries to _COUNTRY_ALIASES — never edit this class.
-    """
-
     def __init__(self, aliases: Dict[str, str]) -> None:
-        # Sort longest-first so "united states of america" wins over "america"
         self._aliases = sorted(aliases.items(), key=lambda x: -len(x[0]))
 
     def extract(self, text: str) -> str | None:
         for alias, canonical in self._aliases:
             if len(alias) <= 3:
-                # Short aliases need word-boundary protection to avoid
-                # "us" matching inside "thus", "plus", etc.
                 if re.search(r"\b" + re.escape(alias) + r"\b", text):
                     return canonical
             else:
@@ -193,11 +145,6 @@ class _AliasExtractor:
 
 
 class _KnownListExtractor:
-    """
-    Exact substring match against the canonical country list.
-    Tries longest names first so "South Africa" beats a bare "Africa".
-    """
-
     def __init__(self, countries: List[str]) -> None:
         self._lookup: Dict[str, str] = {c.lower(): c for c in countries}
         self._sorted = sorted(self._lookup.items(), key=lambda x: -len(x[0]))
@@ -210,11 +157,7 @@ class _KnownListExtractor:
 
 
 class _FuzzyExtractor:
-    """
-    Fuzzy match using difflib against the known countries list.
-    Handles typos like "Frence" → France, "Germanu" → Germany.
-    OCP: swap difflib for another library by subclassing — callers unchanged.
-    """
+    """Handles typos e.g. 'Frence' → France using difflib."""
 
     def __init__(self, countries: List[str], cutoff: float = 0.82) -> None:
         self._countries_lower = {c.lower(): c for c in countries}
@@ -222,18 +165,13 @@ class _FuzzyExtractor:
 
     def extract(self, text: str) -> str | None:
         words = text.split()
-        # Try trigrams → bigrams → unigrams (longest candidate first)
         for n in range(min(3, len(words)), 0, -1):
             for i in range(len(words) - n + 1):
                 phrase = " ".join(words[i : i + n])
                 if len(phrase) < 4:
-                    # Skip very short phrases to avoid false positives
                     continue
                 matches = difflib.get_close_matches(
-                    phrase,
-                    self._countries_lower.keys(),
-                    n=1,
-                    cutoff=self._cutoff,
+                    phrase, self._countries_lower.keys(), n=1, cutoff=self._cutoff
                 )
                 if matches:
                     return self._countries_lower[matches[0]]
@@ -241,11 +179,7 @@ class _FuzzyExtractor:
 
 
 class _FallbackExtractor:
-    """
-    Last-resort: strips field keywords and stop-words; returns whatever remains.
-    This intentionally has a high false-positive rate — it only runs when all
-    other extractors have already failed.
-    """
+    """Last resort: strips keywords and stop-words, returns whatever remains."""
 
     def extract(self, text: str) -> str | None:
         cleaned = text
@@ -258,13 +192,6 @@ class _FallbackExtractor:
 
 
 class _CompositeCountryExtractor:
-    """
-    Chain of responsibility: tries extractors in priority order, returns the
-    first non-None result.
-    OCP: inject a different list of extractors without touching callers.
-    DIP: depends on the ICountryExtractor Protocol, not concrete classes.
-    """
-
     def __init__(self, extractors: list) -> None:
         self._extractors = extractors
 
@@ -277,11 +204,6 @@ class _CompositeCountryExtractor:
 
 
 class _KeywordFieldExtractor:
-    """
-    Maps FIELD_KEYWORDS to CountryField enum values.
-    SRP: only responsible for field detection, nothing else.
-    """
-
     def __init__(self, keywords: Dict[str, CountryField]) -> None:
         self._keywords = sorted(keywords.items(), key=lambda x: -len(x[0]))
 
@@ -295,8 +217,6 @@ class _KeywordFieldExtractor:
         return found
 
 
-# ── Module-level singletons (DIP: nodes depend on abstractions) ───────────────
-
 _country_extractor: ICountryExtractor = _CompositeCountryExtractor(
     [
         _AliasExtractor(_COUNTRY_ALIASES),
@@ -309,10 +229,7 @@ _country_extractor: ICountryExtractor = _CompositeCountryExtractor(
 _field_extractor: IFieldExtractor = _KeywordFieldExtractor(FIELD_KEYWORDS)
 
 
-# ── Edge-case detectors ───────────────────────────────────────────────────────
-
 def _detect_historical(query_lower: str) -> Optional[str]:
-    """Return the historical-country message if the query names a defunct state."""
     for name, message in HISTORICAL_COUNTRIES.items():
         if name in query_lower:
             return message
@@ -320,60 +237,34 @@ def _detect_historical(query_lower: str) -> Optional[str]:
 
 
 def _detect_ambiguous(country: str) -> Optional[List[str]]:
-    """Return candidate list if the country name is ambiguous."""
     return AMBIGUOUS_COUNTRIES.get(country.lower())
 
 
 def _detect_comparison(query_lower: str) -> List[str]:
-    """
-    Return the two (or more) countries if this looks like a comparison query.
-    Only fires when an explicit comparison keyword is present.
-    """
     if not _COMPARISON_RE.search(query_lower):
         return []
-
-    # Collect all countries mentioned in the query
     found: List[str] = []
     for country_lower, country_proper in sorted(
         _COUNTRY_LOOKUP.items(), key=lambda x: -len(x[0])
     ):
         if country_lower in query_lower and country_proper not in found:
             found.append(country_proper)
-
-    # Also check aliases
     for alias, canonical in sorted(_COUNTRY_ALIASES.items(), key=lambda x: -len(x[0])):
         if alias in query_lower and canonical not in found:
             found.append(canonical)
-
     return found if len(found) >= 2 else []
 
 
-# ── Public helpers (kept for backward-compat with existing tests) ─────────────
-
+# kept for backward-compat with tests
 def _extract_country(query_lower: str) -> Optional[str]:
-    """Kept for test backward-compatibility. Delegates to the composite extractor."""
     return _country_extractor.extract(query_lower)
 
 
 def _extract_fields(query_lower: str) -> List[CountryField]:
-    """Kept for test backward-compatibility. Delegates to the keyword extractor."""
     return _field_extractor.extract(query_lower)
 
 
-# ── LangGraph node ────────────────────────────────────────────────────────────
-
 def parse_intent(state: dict) -> dict:
-    """
-    LangGraph node — parse user intent.
-
-    Sets in the returned dict:
-      country_name        — canonical country name (or None)
-      requested_fields    — list of CountryField values
-      error               — human-readable error / clarification (or None)
-      is_historical       — True when the query is about a defunct country
-      comparison_countries— list of countries when a comparison is detected
-      ambiguous_countries — candidate list when the name is ambiguous
-    """
     query = state.get("user_query", "")
     normalised = _normalise(query)
 
@@ -383,7 +274,6 @@ def parse_intent(state: dict) -> dict:
         "ambiguous_countries": [],
     }
 
-    # ── 1. Historical country check (before extraction, highest priority) ──
     historical_msg = _detect_historical(normalised)
     if historical_msg:
         updates["error"] = historical_msg
@@ -391,7 +281,6 @@ def parse_intent(state: dict) -> dict:
         updates["requested_fields"] = [CountryField.GENERAL]
         return updates
 
-    # ── 2. Comparison / multi-country check ───────────────────────────────
     comparison = _detect_comparison(normalised)
     if comparison:
         updates["comparison_countries"] = comparison
@@ -403,7 +292,6 @@ def parse_intent(state: dict) -> dict:
         updates["requested_fields"] = [CountryField.GENERAL]
         return updates
 
-    # ── 3. Extract country and fields ─────────────────────────────────────
     country = _country_extractor.extract(normalised)
     fields = _field_extractor.extract(normalised)
 
@@ -417,7 +305,6 @@ def parse_intent(state: dict) -> dict:
         )
         return updates
 
-    # ── 4. Ambiguous country check ────────────────────────────────────────
     candidates = _detect_ambiguous(country)
     if candidates:
         updates["ambiguous_countries"] = candidates

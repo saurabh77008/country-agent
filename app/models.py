@@ -1,4 +1,4 @@
-"""Pydantic models and shared domain data for the Country Information Agent."""
+"""Pydantic models for the Country Information Agent."""
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -55,10 +55,6 @@ FIELD_KEYWORDS: Dict[str, CountryField] = {
 }
 
 
-# ── Edge-case lookup tables ────────────────────────────────────────────────
-
-# Names that could refer to more than one real entity.
-# The agent surfaces a clarification message instead of guessing.
 AMBIGUOUS_COUNTRIES: Dict[str, List[str]] = {
     "georgia": [
         "Georgia (the country in the Caucasus)",
@@ -78,8 +74,6 @@ AMBIGUOUS_COUNTRIES: Dict[str, List[str]] = {
     ],
 }
 
-# Countries that no longer exist as sovereign states.
-# Value is the message shown to the user.
 HISTORICAL_COUNTRIES: Dict[str, str] = {
     "ussr": (
         "The **Soviet Union (USSR)** dissolved in 1991. "

@@ -7,7 +7,7 @@ Three-node graph:
 Conditional edge skips fetch if intent parsing fails.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, END
@@ -25,6 +25,10 @@ class GraphState(TypedDict, total=False):
     extracted_data: Dict[str, Any]
     answer: str
     error: Optional[str]
+    # Edge-case flags set by parse_intent
+    is_historical: bool           # defunct country (USSR, Yugoslavia …)
+    comparison_countries: list    # two+ countries in a comparison query
+    ambiguous_countries: list     # name maps to multiple entities
 
 
 def _should_fetch(state: dict) -> str:

@@ -1,4 +1,4 @@
-"""Pydantic models for the Country Information Agent."""
+"""Pydantic models and shared domain data for the Country Information Agent."""
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -52,6 +52,63 @@ FIELD_KEYWORDS: Dict[str, CountryField] = {
     "tell me about": CountryField.GENERAL,
     "information": CountryField.GENERAL,
     "info": CountryField.GENERAL,
+}
+
+
+# ── Edge-case lookup tables ────────────────────────────────────────────────
+
+# Names that could refer to more than one real entity.
+# The agent surfaces a clarification message instead of guessing.
+AMBIGUOUS_COUNTRIES: Dict[str, List[str]] = {
+    "georgia": [
+        "Georgia (the country in the Caucasus)",
+        "Georgia (US state — not a sovereign country)",
+    ],
+    "korea": ["South Korea", "North Korea"],
+    "sudan": ["Sudan", "South Sudan"],
+    "congo": [
+        "Democratic Republic of the Congo (DRC)",
+        "Republic of the Congo",
+    ],
+    "guinea": [
+        "Guinea",
+        "Guinea-Bissau",
+        "Equatorial Guinea",
+        "Papua New Guinea",
+    ],
+}
+
+# Countries that no longer exist as sovereign states.
+# Value is the message shown to the user.
+HISTORICAL_COUNTRIES: Dict[str, str] = {
+    "ussr": (
+        "The **Soviet Union (USSR)** dissolved in 1991. "
+        "You can ask about successor states such as **Russia**, **Ukraine**, "
+        "**Kazakhstan**, or the **Baltic states**."
+    ),
+    "soviet union": (
+        "The **Soviet Union** dissolved in 1991. "
+        "Try asking about **Russia**, **Ukraine**, **Kazakhstan**, "
+        "or another successor state."
+    ),
+    "yugoslavia": (
+        "**Yugoslavia** dissolved in the early 1990s. "
+        "Its successor states are: **Slovenia**, **Croatia**, "
+        "**Bosnia and Herzegovina**, **Serbia**, **Montenegro**, "
+        "**North Macedonia**, and **Kosovo**."
+    ),
+    "east germany": (
+        "**East Germany (GDR)** reunified with West Germany in 1990. "
+        "Try asking about **Germany**."
+    ),
+    "west germany": (
+        "**West Germany (FRG)** reunified with East Germany in 1990. "
+        "Try asking about **Germany**."
+    ),
+    "czechoslovakia": (
+        "**Czechoslovakia** peacefully dissolved in 1993 (the 'Velvet Divorce'). "
+        "You can ask about **Czechia** (Czech Republic) or **Slovakia**."
+    ),
 }
 
 

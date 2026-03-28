@@ -1,19 +1,4 @@
-"""
-Node 3 — Answer Synthesis
-
-SOLID design:
-  SRP — TemplateSynthesiser is solely responsible for turning state into text
-  OCP — swap or extend by implementing IAnswerSynthesiser
-  DIP — synthesise_answer (the node) depends on IAnswerSynthesiser, not the
-        concrete class
-
-Edge cases handled:
-  • Historical-country queries (is_historical flag)
-  • Ambiguous-name queries    (ambiguous_countries list)
-  • Multi-country comparisons (comparison_countries list)
-  • Borders now show resolved country names (not raw ISO codes)
-  • Graceful N/A for any missing field
-"""
+"""Node 3 — build a human-readable answer from graph state."""
 
 from __future__ import annotations
 
@@ -22,8 +7,6 @@ from typing import Any, List
 from app.interfaces import IAnswerSynthesiser
 from app.models import CountryField
 
-
-# ── Pure helpers ──────────────────────────────────────────────────────────────
 
 def _format_population(pop: Any) -> str:
     if isinstance(pop, (int, float)):
@@ -40,8 +23,7 @@ def _single_field_sentence(country: str, field: CountryField, data: dict) -> str
     if field == CountryField.CAPITAL:
         return f"The capital of {country} is **{data.get('capital', 'unknown')}**."
     if field == CountryField.POPULATION:
-        pop = _format_population(data.get("population", "unknown"))
-        return f"{country} has a population of approximately **{pop}**."
+        return f"{country} has a population of approximately **{_format_population(data.get('population', 'unknown'))}**."
     if field == CountryField.CURRENCY:
         return f"{country} uses **{data.get('currency', 'unknown')}**."
     if field == CountryField.LANGUAGE:
@@ -69,17 +51,7 @@ def _single_field_sentence(country: str, field: CountryField, data: dict) -> str
     return f"Here is the information I found about {country}."
 
 
-# ── Synthesiser class (SRP + OCP) ─────────────────────────────────────────────
-
 class TemplateSynthesiser:
-    """
-    Builds human-readable answers from graph state using pre-defined templates.
-    Implements IAnswerSynthesiser.
-
-    OCP: to add a new field type, add a branch to _single_field_sentence and
-    a line to _build_list — no other class needs changing.
-    """
-
     def synthesise(self, state: dict) -> str:
         error = state.get("error")
         if error:
@@ -96,27 +68,20 @@ class TemplateSynthesiser:
         field_set = set(fields)
         is_general = CountryField.GENERAL in field_set
 
-        # Single-field: one natural sentence
         if len(field_set) == 1 and not is_general:
             return _single_field_sentence(country, fields[0], data)
 
-        # Multi-field or general: formatted list
         return self._build_list(official, data, field_set, is_general)
 
     @staticmethod
-    def _build_list(
-        official: str,
-        data: dict,
-        field_set: set,
-        is_general: bool,
-    ) -> str:
+    def _build_list(official: str, data: dict, field_set: set, is_general: bool) -> str:
         parts: List[str] = []
-
-        if is_general:
-            parts.append(f"Here's what I know about **{official}**:\n")
 
         def _want(f: CountryField) -> bool:
             return is_general or f in field_set
+
+        if is_general:
+            parts.append(f"Here's what I know about **{official}**:\n")
 
         if "capital" in data and _want(CountryField.CAPITAL):
             parts.append(f"**Capital:** {data['capital']}")
@@ -138,9 +103,7 @@ class TemplateSynthesiser:
             parts.append(f"**Timezones:** {data['timezones']}")
         if "borders" in data and _want(CountryField.BORDERS):
             borders = data["borders"]
-            parts.append(
-                f"**Borders:** {', '.join(borders) if borders else 'None (island nation)'}"
-            )
+            parts.append(f"**Borders:** {', '.join(borders) if borders else 'None (island nation)'}")
         if "calling_codes" in data and _want(CountryField.CALLING_CODE):
             parts.append(f"**Calling code:** {data['calling_codes']}")
         if "flag_emoji" in data and _want(CountryField.FLAG):
@@ -151,13 +114,8 @@ class TemplateSynthesiser:
         return "\n".join(parts)
 
 
-# ── Module-level singleton (DIP wiring) ───────────────────────────────────────
-
 _synthesiser: IAnswerSynthesiser = TemplateSynthesiser()
 
 
-# ── LangGraph node ────────────────────────────────────────────────────────────
-
 def synthesise_answer(state: dict) -> dict:
-    """LangGraph node — delegates to TemplateSynthesiser."""
     return {"answer": _synthesiser.synthesise(state)}
